@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TubeCaption Local</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <p class="eyebrow">LOCAL TRANSCRIPT</p>
+        <h1>TubeCaption</h1>
+      </div>
+      <span id="statusBadge" class="badge">检测中</span>
+    </header>
+
+    <section class="card video-card">
+      <h2 id="videoTitle">正在读取视频…</h2>
+      <p id="videoMeta" class="muted"></p>
+    </section>
+
+    <section class="card controls">
+      <label for="trackSelect">YouTube 字幕轨</label>
+      <select id="trackSelect" disabled>
+        <option>尚未检测</option>
+      </select>
+
+      <button id="extractButton" class="primary" disabled>提取已有字幕</button>
+      <button id="asrButton" class="secondary" disabled>本地生成字幕</button>
+      <button id="cancelButton" class="ghost danger" hidden>取消识别</button>
+
+      <p id="message" class="message">请打开一个 YouTube 视频。</p>
+      <div id="progress" class="progress" hidden>
+        <div id="progressBar"></div>
+      </div>
+    </section>
+
+    <section id="resultPanel" class="card" hidden>
+      <div class="result-heading">
+        <div>
+          <p class="eyebrow">RESULT</p>
+          <h2 id="resultLabel">字幕结果</h2>
+        </div>
+        <span id="segmentCount" class="count"></span>
+      </div>
+      <pre id="preview"></pre>
+      <div class="downloads">
+        <button data-format="md">MD</button>
+        <button data-format="srt">SRT</button>
+        <button data-format="txt">TXT</button>
+        <button data-format="json">JSON</button>
+      </div>
+    </section>
+
+    <footer>音频仅在本机临时处理 · 机器字幕可能有误</footer>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>
+
