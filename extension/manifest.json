@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "TubeCaption Local",
-  "description": "Extract existing YouTube captions or generate them locally with Whisper.",
-  "version": "0.1.0",
+  "name": "视频字幕提取插件",
+  "description": "提取 YouTube 视频已有字幕轨；没有字幕时，用本地 Whisper 语音识别生成字幕。",
+  "version": "0.1.1",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0291TNfN6GsmWwd0sbDczeutbARMuoCD01bJ+HWN70pXu+iHisAUeGWMrNUkV85WFAPGMapqpMiyu2W/c6xLjyj1Ibs1S1L3YdHc5hLJKNgdqMyjZevE2HPw7xR/hnr/85aX5F8FMfVVGdfEYbCRihHPQjy5Q75m3g9GIw0MR67iL9/aOraxoit+8gevL7wmOgd2hw2ysYRsOFuByX7O1kx5oedSx5sZpQnlanJ4j5ImjeKgj8ZJH5KWdtCONzvmOcsKrgaAzVla/efmpppKI+of1RKILhg4uj/z7GmAscsFU8kJKwwCipO3GnD6zoGxTZZyLDQ4QCJt9L1Lvs8sVQIDAQAB",
   "permissions": [
     "activeTab",
@@ -18,7 +18,7 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "TubeCaption Local",
+    "default_title": "视频字幕提取插件",
     "default_popup": "popup.html"
   },
   "content_scripts": [

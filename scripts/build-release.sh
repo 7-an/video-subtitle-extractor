@@ -5,7 +5,7 @@ PROJECT_DIR="$(cd -- "$(dirname -- "$0")/.." && pwd)"
 VERSION="$(node -p "require('$PROJECT_DIR/extension/manifest.json').version")"
 DIST_DIR="$PROJECT_DIR/dist"
 STAGE_DIR="$(mktemp -d)"
-PACKAGE_DIR="$STAGE_DIR/tubecaption-local-v$VERSION-macos"
+PACKAGE_DIR="$STAGE_DIR/video-subtitle-extractor-v$VERSION-macos"
 
 cleanup() {
   rm -rf "$STAGE_DIR"
@@ -20,8 +20,8 @@ rm -rf "$PACKAGE_DIR/native-host/tests" "$PACKAGE_DIR/native-host/__pycache__"
 chmod 755 "$PACKAGE_DIR/install-macos.command" "$PACKAGE_DIR/uninstall-macos.command"
 
 cd "$STAGE_DIR"
-zip -qr "$DIST_DIR/tubecaption-local-v$VERSION-macos.zip" "$(basename "$PACKAGE_DIR")"
+zip -qr "$DIST_DIR/video-subtitle-extractor-v$VERSION-macos.zip" "$(basename "$PACKAGE_DIR")"
 cd "$DIST_DIR"
-shasum -a 256 "tubecaption-local-v$VERSION-macos.zip" > "SHA256SUMS.txt"
+shasum -a 256 "video-subtitle-extractor-v$VERSION-macos.zip" > "SHA256SUMS.txt"
 
-printf 'Built %s\n' "$DIST_DIR/tubecaption-local-v$VERSION-macos.zip"
+printf 'Built %s\n' "$DIST_DIR/video-subtitle-extractor-v$VERSION-macos.zip"

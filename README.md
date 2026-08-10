@@ -1,6 +1,6 @@
-# TubeCaption Local
+# 视频字幕提取插件
 
-TubeCaption Local 是一个面向 Chrome / Chromium 的本地 YouTube 字幕工具。
+视频字幕提取插件是一个面向 Chrome / Chromium 的本地 YouTube 字幕工具。
 
 - 视频已有字幕轨时，直接读取 YouTube 提供的字幕。
 - 视频没有字幕轨时，通过本地 `yt-dlp + faster-whisper` 生成机器字幕。
@@ -12,7 +12,7 @@ TubeCaption Local 是一个面向 Chrome / Chromium 的本地 YouTube 字幕工�
 
 ## 下载与安装（macOS）
 
-1. 从 GitHub Releases 下载 `tubecaption-local-v0.1.0-macos.zip`。
+1. 从 GitHub Releases 下载 `video-subtitle-extractor-v0.1.1-macos.zip`。
 2. 解压后，双击 `install-macos.command`。
 3. 首次安装会创建独立 Python 虚拟环境并安装语音识别依赖，可能需要几分钟。
 4. 打开 `chrome://extensions`，开启“开发者模式”。

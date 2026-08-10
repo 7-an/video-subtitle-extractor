@@ -15,6 +15,6 @@ for directory in "${REGISTER_DIRS[@]}"; do
 done
 rm -rf "$APP_DIR"
 
-printf 'TubeCaption Local 的本地助手、模型缓存和注册文件已删除。\n'
+printf '视频字幕提取插件的本地助手、模型缓存和注册文件已删除。\n'
 printf '请在 chrome://extensions 中手动移除扩展。\n'
 

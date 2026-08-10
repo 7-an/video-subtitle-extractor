@@ -2,7 +2,7 @@
 
 ## Supported scope
 
-TubeCaption Local only accepts HTTPS URLs from `youtube.com`, `www.youtube.com`,
+视频字幕提取插件 only accepts HTTPS URLs from `youtube.com`, `www.youtube.com`,
 `m.youtube.com`, or `youtu.be`. The native host does not execute shell strings,
 does not accept arbitrary downloader arguments, and does not read browser cookie
 stores.

@@ -10,7 +10,7 @@ HOST_DIR="$APP_DIR/native-host"
 EXTENSION_DIR="$APP_DIR/extension"
 VENV_DIR="$APP_DIR/venv"
 
-printf '\nTubeCaption Local 安装器\n'
+printf '\n视频字幕提取插件 安装器\n'
 printf '=========================\n\n'
 
 if [[ "$(uname -s)" != "Darwin" ]]; then
@@ -65,7 +65,7 @@ NATIVE_MANIFEST="$HOST_DIR/$HOST_NAME.json"
 cat > "$NATIVE_MANIFEST" <<EOF
 {
   "name": "$HOST_NAME",
-  "description": "Local transcription host for TubeCaption Local",
+  "description": "Local transcription host for 视频字幕提取插件",
   "path": "$HOST_RUNNER",
   "type": "stdio",
   "allowed_origins": ["chrome-extension://$EXTENSION_ID/"]

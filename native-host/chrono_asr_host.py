@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Native Messaging host for TubeCaption Local.
+"""Native Messaging host for 视频字幕提取插件 (Video Subtitle Extractor).
 
 Stdout is reserved for Chrome's framed JSON protocol. Diagnostics go to stderr.
 """
@@ -317,7 +317,7 @@ def run_job(request: dict[str, Any]) -> None:
         details = ""
         if os.environ.get("TUBECAPTION_DEBUG") == "1":
             details = traceback.format_exc(limit=5)
-        print(f"TubeCaption job failed: {error}", file=sys.stderr, flush=True)
+        print(f"subtitle-extractor job failed: {error}", file=sys.stderr, flush=True)
         write_message({"type": "error", "jobId": job_id, "error": str(error), "details": details})
     finally:
         with _worker_lock:
