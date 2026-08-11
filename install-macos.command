@@ -9,6 +9,10 @@ APP_DIR="$HOME/Library/Application Support/$APP_NAME"
 HOST_DIR="$APP_DIR/native-host"
 EXTENSION_DIR="$APP_DIR/extension"
 VENV_DIR="$APP_DIR/venv"
+UPGRADING=false
+if [[ -d "$APP_DIR" ]]; then
+  UPGRADING=true
+fi
 
 printf '\n视频字幕提取插件 安装器\n'
 printf '=========================\n\n'
@@ -84,10 +88,19 @@ for directory in "${REGISTER_DIRS[@]}"; do
   cp "$NATIVE_MANIFEST" "$directory/$HOST_NAME.json"
 done
 
-printf '\n安装完成。\n'
+if [[ "$UPGRADING" == true ]]; then
+  printf '\n升级完成；原有模型缓存已保留。\n'
+else
+  printf '\n安装完成。\n'
+fi
 printf '1. 打开 chrome://extensions\n'
-printf '2. 开启“开发者模式”\n'
-printf '3. 点击“加载已解压的扩展程序”\n'
-printf '4. 选择：%s\n' "$EXTENSION_DIR"
+if [[ "$UPGRADING" == true ]]; then
+  printf '2. 找到“视频字幕提取插件”，点击“重新加载”\n'
+  printf '3. 不需要删除旧扩展，也不要运行卸载脚本\n'
+else
+  printf '2. 开启“开发者模式”\n'
+  printf '3. 点击“加载已解压的扩展程序”\n'
+  printf '4. 选择：%s\n' "$EXTENSION_DIR"
+fi
 printf '\n扩展 ID 应显示为：%s\n' "$EXTENSION_ID"
 printf '首次本地识别会下载 Whisper 模型。\n\n'

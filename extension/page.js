@@ -4,6 +4,10 @@
 
   const REQUEST_SOURCE = "tubecaption-extension";
   const RESPONSE_SOURCE = "tubecaption-page";
+  let observedVideoId = parseVideoId(location.href);
+  let navigatedBetweenVideos = false;
+
+  window.addEventListener("yt-navigate-finish", noteCurrentVideo);
 
   window.addEventListener("message", async (event) => {
     if (event.source !== window || event.origin !== window.location.origin) return;
@@ -12,7 +16,7 @@
 
     try {
       let data;
-      if (message.action === "getVideo") data = getVideo();
+      if (message.action === "getVideo") data = await getVideo();
       else if (message.action === "fetchCaption") data = await fetchCaption(message.payload);
       else throw new Error(`不支持的页面操作：${message.action}`);
 
@@ -29,16 +33,17 @@
     );
   }
 
-  function getVideo() {
+  async function getVideo() {
     const videoId = parseVideoId(location.href);
-    const response = findPlayerResponse(videoId);
+    if (!videoId) throw new Error("当前页面没有有效的 YouTube 视频 ID。");
+    const response = await waitForPlayerResponse(videoId);
     const details = response?.videoDetails || {};
     const rawTracks = response?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
     const tracks = rawTracks.filter((item) => item.baseUrl).map(normalizeTrack);
 
     return {
       platform: "youtube",
-      videoId: details.videoId || videoId,
+      videoId,
       url: location.href,
       title: details.title || document.title.replace(/\s*-\s*YouTube$/, ""),
       author: details.author || "",
@@ -48,18 +53,49 @@
   }
 
   function findPlayerResponse(videoId) {
+    noteCurrentVideo();
     const watch = document.querySelector("ytd-watch-flexy");
-    const candidates = [
+    const player = document.querySelector("ytd-player");
+    const liveCandidates = [
       watch?.playerResponse,
       watch?.playerData,
+      player?.playerResponse
+    ].map(parsePlayerResponse).filter(Boolean);
+    const initialCandidates = navigatedBetweenVideos ? [] : [
       window.ytInitialPlayerResponse,
       parseLegacyPlayerResponse(),
       ...parseResponsesFromScripts()
-    ].filter(Boolean);
+    ].map(parsePlayerResponse).filter(Boolean);
 
-    return candidates.find((item) => item?.videoDetails?.videoId === videoId)
-      || candidates.find((item) => item?.videoDetails?.videoId)
-      || null;
+    return [...liveCandidates, ...initialCandidates]
+      .find((item) => item?.videoDetails?.videoId === videoId) || null;
+  }
+
+  async function waitForPlayerResponse(videoId) {
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const response = findPlayerResponse(videoId);
+      if (response) return response;
+      await delay(250);
+    }
+    throw new Error("YouTube 页面数据正在更新，请稍后重新打开插件。");
+  }
+
+  function noteCurrentVideo() {
+    const currentVideoId = parseVideoId(location.href);
+    if (observedVideoId && currentVideoId && observedVideoId !== currentVideoId) {
+      navigatedBetweenVideos = true;
+    }
+    if (currentVideoId) observedVideoId = currentVideoId;
+  }
+
+  function parsePlayerResponse(value) {
+    if (!value) return null;
+    if (typeof value !== "string") return value;
+    try {
+      return JSON.parse(value);
+    } catch (_error) {
+      return null;
+    }
   }
 
   function parseLegacyPlayerResponse() {
@@ -133,8 +169,17 @@
   }
 
   async function fetchCaption(payload) {
-    const track = payload?.track;
-    if (!track?.baseUrl) throw new Error("没有可用的字幕地址。");
+    const requestedVideoId = payload?.videoId || "";
+    const currentVideoId = parseVideoId(location.href);
+    if (!requestedVideoId || requestedVideoId !== currentVideoId) {
+      throw new Error("视频页面已经切换，请重新打开插件后再提取。");
+    }
+
+    const metadata = await getVideo();
+    if (metadata.videoId !== requestedVideoId) {
+      throw new Error("播放器数据与当前视频不匹配，请稍后重试。");
+    }
+    const track = resolveCurrentTrack(payload?.track, metadata.tracks);
 
     const jsonUrl = new URL(track.baseUrl);
     jsonUrl.searchParams.set("fmt", "json3");
@@ -152,8 +197,22 @@
     }
 
     if (!segments.length) throw new Error("字幕轨存在，但返回内容为空。");
-    const metadata = getVideo();
     return buildResult(metadata, track, segments);
+  }
+
+  function resolveCurrentTrack(requested, tracks) {
+    if (!requested) throw new Error("没有选择字幕轨。");
+    const current = tracks.find((item) => item.id === requested.id)
+      || tracks.find((item) => item.language === requested.language && item.kind === requested.kind)
+      || tracks.find((item) => item.language === requested.language && item.source === requested.source);
+    if (!current?.baseUrl) {
+      throw new Error("所选字幕轨已经失效，请重新打开插件后选择。");
+    }
+    return current;
+  }
+
+  function delay(milliseconds) {
+    return new Promise((resolve) => setTimeout(resolve, milliseconds));
   }
 
   function parseJson3(text) {
@@ -219,4 +278,3 @@
     return url.searchParams.get("v") || "";
   }
 })();
-

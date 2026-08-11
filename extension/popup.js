@@ -5,11 +5,24 @@ const state = {
   running: false
 };
 
+const MODEL_STORAGE_KEY = "tubeCaptionAsrModel";
+const LANGUAGE_STORAGE_KEY = "tubeCaptionAsrLanguage";
+const MODEL_HINTS = {
+  tiny: "tiny：速度最快，适合快速初稿，准确度最低。",
+  base: "base：速度较快，准确度略高于 tiny。",
+  small: "small：默认推荐，在速度、内存和准确度之间较均衡。",
+  medium: "medium：准确度优先，但识别更慢、占用更多内存，首次需单独下载。"
+};
+const SUPPORTED_LANGUAGES = new Set(["auto", "zh", "en", "ja", "ko", "es", "fr", "de"]);
+
 const nodes = {
   statusBadge: document.getElementById("statusBadge"),
   videoTitle: document.getElementById("videoTitle"),
   videoMeta: document.getElementById("videoMeta"),
   trackSelect: document.getElementById("trackSelect"),
+  modelSelect: document.getElementById("modelSelect"),
+  languageSelect: document.getElementById("languageSelect"),
+  modelHint: document.getElementById("modelHint"),
   extractButton: document.getElementById("extractButton"),
   asrButton: document.getElementById("asrButton"),
   cancelButton: document.getElementById("cancelButton"),
@@ -27,6 +40,8 @@ background.onMessage.addListener(handleBackgroundMessage);
 nodes.extractButton.addEventListener("click", extractExistingCaption);
 nodes.asrButton.addEventListener("click", startAsr);
 nodes.cancelButton.addEventListener("click", () => background.postMessage({ type: "cancelAsr" }));
+nodes.modelSelect.addEventListener("change", saveAsrPreferences);
+nodes.languageSelect.addEventListener("change", saveAsrPreferences);
 document.querySelectorAll("[data-format]").forEach((button) => {
   button.addEventListener("click", () => downloadResult(button.dataset.format));
 });
@@ -34,6 +49,8 @@ document.querySelectorAll("[data-format]").forEach((button) => {
 initialize();
 
 async function initialize() {
+  clearResult();
+  await restoreAsrPreferences();
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   state.tab = tab;
 
@@ -49,10 +66,15 @@ async function initialize() {
     if (!response.ok) throw new Error(response.error);
     state.video = response.data;
     renderVideo(response.data);
+    background.postMessage({ type: "getState", videoId: response.data.videoId });
   } catch (error) {
+    clearResult();
+    const fallbackVideoId = parseVideoId(tab?.url);
+    state.video = { videoId: fallbackVideoId, tracks: [] };
     setStatus("需刷新", "error");
     nodes.videoTitle.textContent = cleanTitle(tab.title || "YouTube 视频");
     nodes.asrButton.disabled = false;
+    if (fallbackVideoId) background.postMessage({ type: "getState", videoId: fallbackVideoId });
     setMessage(`页面连接失败：${error.message} 请刷新视频页面后重试。`, true);
   }
 }
@@ -90,13 +112,18 @@ async function extractExistingCaption() {
   const track = state.video?.tracks?.find((item) => item.id === nodes.trackSelect.value);
   if (!track) return setMessage("请先选择字幕轨。", true);
 
+  clearResult();
   setWorking(true, "正在读取 YouTube 字幕…", false);
   try {
-    const response = await sendToTab("TCL_FETCH_CAPTION", { track });
+    const response = await sendToTab("TCL_FETCH_CAPTION", {
+      track,
+      videoId: state.video.videoId
+    });
     if (!response.ok) throw new Error(response.error);
-    showResult(response.data);
+    if (!showResult(response.data)) throw new Error("字幕结果与当前视频不匹配，请重试。");
     setMessage("已有字幕提取完成。");
   } catch (error) {
+    clearResult();
     setMessage(error.message, true);
   } finally {
     setWorking(false);
@@ -105,17 +132,21 @@ async function extractExistingCaption() {
 
 function startAsr() {
   if (!state.tab?.url) return;
+  clearResult();
   state.running = true;
   setWorking(true, "正在连接本地识别助手…", true);
   background.postMessage({
     type: "startAsr",
     url: state.tab.url,
-    language: "auto",
-    model: "small"
+    videoId: state.video?.videoId || "",
+    language: selectedLanguage(),
+    model: selectedModel()
   });
 }
 
 function handleBackgroundMessage(message) {
+  if (!isMessageForCurrentVideo(message)) return;
+
   if (message.type === "jobState" && message.status === "running") {
     state.running = true;
     setWorking(true, "本地识别任务仍在运行…", true);
@@ -131,8 +162,11 @@ function handleBackgroundMessage(message) {
   if (message.type === "result") {
     state.running = false;
     setWorking(false);
-    showResult(message.data);
-    setMessage("本地字幕生成完成；临时音频已删除。");
+    if (showResult(message.data)) {
+      setMessage("本地字幕生成完成；临时音频已删除。");
+    } else {
+      setMessage("本地助手返回了无效或不匹配的字幕结果。", true);
+    }
   }
 
   if (message.type === "error") {
@@ -144,7 +178,10 @@ function handleBackgroundMessage(message) {
 }
 
 function showResult(result, cached = false) {
-  if (!result?.segments?.length) return;
+  if (!result?.segments?.length || result.videoId !== state.video?.videoId) {
+    clearResult();
+    return false;
+  }
   state.result = result;
   nodes.resultPanel.hidden = false;
   nodes.resultLabel.textContent = result.selectedTrack?.label || "字幕结果";
@@ -153,11 +190,27 @@ function showResult(result, cached = false) {
     .map((item) => `[${formatClock(item.startSeconds)}] ${item.text}`)
     .join("\n");
   if (cached) setMessage("已恢复上次生成的字幕结果。");
+  return true;
+}
+
+function clearResult() {
+  state.result = null;
+  nodes.resultPanel.hidden = true;
+  nodes.resultLabel.textContent = "字幕结果";
+  nodes.segmentCount.textContent = "";
+  nodes.preview.textContent = "";
+}
+
+function isMessageForCurrentVideo(message) {
+  const videoId = message?.videoId || message?.data?.videoId || "";
+  return !videoId || videoId === state.video?.videoId;
 }
 
 function setWorking(working, text = "", localAsr = false) {
   nodes.extractButton.disabled = working || !(state.video?.tracks?.length);
   nodes.asrButton.disabled = working;
+  nodes.modelSelect.disabled = working;
+  nodes.languageSelect.disabled = working;
   nodes.cancelButton.hidden = !(working && localAsr);
   nodes.progress.hidden = !working;
   if (text) setMessage(text);
@@ -171,6 +224,48 @@ function setStatus(text, variant = "") {
 function setMessage(text, error = false) {
   nodes.message.textContent = text;
   nodes.message.classList.toggle("error", error);
+}
+
+async function restoreAsrPreferences() {
+  let stored = {};
+  try {
+    stored = await chrome.storage.local.get([MODEL_STORAGE_KEY, LANGUAGE_STORAGE_KEY]);
+  } catch (_error) {
+    // Keep safe defaults when extension storage is temporarily unavailable.
+  }
+  const model = Object.hasOwn(MODEL_HINTS, stored[MODEL_STORAGE_KEY])
+    ? stored[MODEL_STORAGE_KEY]
+    : "small";
+  const language = SUPPORTED_LANGUAGES.has(stored[LANGUAGE_STORAGE_KEY])
+    ? stored[LANGUAGE_STORAGE_KEY]
+    : "auto";
+  nodes.modelSelect.value = model;
+  nodes.languageSelect.value = language;
+  updateModelHint();
+}
+
+function saveAsrPreferences() {
+  const model = selectedModel();
+  const language = selectedLanguage();
+  nodes.modelSelect.value = model;
+  nodes.languageSelect.value = language;
+  updateModelHint();
+  chrome.storage.local.set({
+    [MODEL_STORAGE_KEY]: model,
+    [LANGUAGE_STORAGE_KEY]: language
+  }).catch(() => {});
+}
+
+function updateModelHint() {
+  nodes.modelHint.textContent = MODEL_HINTS[selectedModel()];
+}
+
+function selectedModel() {
+  return Object.hasOwn(MODEL_HINTS, nodes.modelSelect.value) ? nodes.modelSelect.value : "small";
+}
+
+function selectedLanguage() {
+  return SUPPORTED_LANGUAGES.has(nodes.languageSelect.value) ? nodes.languageSelect.value : "auto";
 }
 
 function sendToTab(type, payload = {}) {
@@ -259,5 +354,15 @@ function isSupportedUrl(value) {
       && (url.pathname === "/watch" || url.pathname.startsWith("/shorts/"));
   } catch (_error) {
     return false;
+  }
+}
+
+function parseVideoId(value) {
+  try {
+    const url = new URL(value);
+    if (url.pathname.startsWith("/shorts/")) return url.pathname.split("/")[2] || "";
+    return url.searchParams.get("v") || "";
+  } catch (_error) {
+    return "";
   }
 }

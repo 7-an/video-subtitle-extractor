@@ -28,6 +28,32 @@
       </select>
 
       <button id="extractButton" class="primary" disabled>提取已有字幕</button>
+
+      <div class="settings-grid">
+        <div class="field">
+          <label for="modelSelect">本地识别模型</label>
+          <select id="modelSelect">
+            <option value="tiny">tiny · 最快</option>
+            <option value="base">base · 较快</option>
+            <option value="small" selected>small · 推荐</option>
+            <option value="medium">medium · 更准确</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="languageSelect">语音语言</label>
+          <select id="languageSelect">
+            <option value="auto" selected>自动检测</option>
+            <option value="zh">中文</option>
+            <option value="en">English</option>
+            <option value="ja">日本語</option>
+            <option value="ko">한국어</option>
+            <option value="es">Español</option>
+            <option value="fr">Français</option>
+            <option value="de">Deutsch</option>
+          </select>
+        </div>
+      </div>
+      <p id="modelHint" class="hint"></p>
       <button id="asrButton" class="secondary" disabled>本地生成字幕</button>
       <button id="cancelButton" class="ghost danger" hidden>取消识别</button>
 
@@ -59,4 +85,3 @@
   <script src="popup.js"></script>
 </body>
 </html>
-

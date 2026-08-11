@@ -1,5 +1,6 @@
 const NATIVE_HOST = "com.chrono_asr.host";
 const STORAGE_KEY = "tubeCaptionLastResult";
+const ALLOWED_MODELS = new Set(["tiny", "base", "small", "medium"]);
 const clients = new Set();
 let nativePort = null;
 let activeJob = null;
@@ -13,19 +14,26 @@ chrome.runtime.onConnect.addListener((port) => {
   port.onMessage.addListener((message) => {
     if (message?.type === "startAsr") startAsr(message);
     if (message?.type === "cancelAsr") cancelAsr();
-    if (message?.type === "getState") sendState(port);
+    if (message?.type === "getState") sendState(port, message.videoId);
   });
-
-  sendState(port);
 });
 
-function sendState(port) {
-  if (activeJob) {
-    safePost(port, { type: "jobState", status: "running", jobId: activeJob.jobId });
+function sendState(port, videoId) {
+  if (!videoId) return;
+  if (activeJob?.videoId === videoId) {
+    safePost(port, {
+      type: "jobState",
+      status: "running",
+      jobId: activeJob.jobId,
+      videoId
+    });
     return;
   }
   chrome.storage.local.get(STORAGE_KEY).then((stored) => {
-    if (stored[STORAGE_KEY]) safePost(port, { type: "cachedResult", data: stored[STORAGE_KEY] });
+    const result = stored[STORAGE_KEY];
+    if (result?.videoId === videoId) {
+      safePost(port, { type: "cachedResult", videoId, data: result });
+    }
   });
 }
 
@@ -40,8 +48,16 @@ function startAsr(message) {
     return;
   }
 
+  const videoId = parseYouTubeVideoId(message.url);
+  if (!videoId || (message.videoId && message.videoId !== videoId)) {
+    broadcast({ type: "error", error: "视频地址与当前页面不匹配。", videoId: message.videoId || videoId });
+    return;
+  }
+
+  const model = ALLOWED_MODELS.has(message.model) ? message.model : "small";
+  const language = normalizeLanguage(message.language);
   const jobId = crypto.randomUUID();
-  activeJob = { jobId, url: message.url };
+  activeJob = { jobId, url: message.url, videoId, model, language };
   partialResult = null;
 
   try {
@@ -50,10 +66,16 @@ function startAsr(message) {
       action: "transcribe",
       jobId,
       url: message.url,
-      language: message.language || "auto",
-      model: message.model || "small"
+      language,
+      model
     });
-    broadcast({ type: "progress", jobId, stage: "starting", message: "正在启动本地识别助手…" });
+    broadcast({
+      type: "progress",
+      jobId,
+      videoId,
+      stage: "starting",
+      message: "正在启动本地识别助手…"
+    });
   } catch (error) {
     finishWithError(error.message);
   }
@@ -74,7 +96,7 @@ function handleNativeMessage(message) {
   if (!activeJob || message.jobId !== activeJob.jobId) return;
 
   if (message.type === "progress") {
-    broadcast(message);
+    broadcast({ ...message, videoId: activeJob.videoId });
     return;
   }
 
@@ -100,14 +122,20 @@ function handleNativeMessage(message) {
 }
 
 async function finishWithResult(data) {
+  const videoId = activeJob?.videoId || data?.videoId || "";
+  if (!data?.segments?.length || data.videoId !== videoId) {
+    finishWithError("本地助手返回了空结果或其他视频的结果。");
+    return;
+  }
   await chrome.storage.local.set({ [STORAGE_KEY]: data });
-  broadcast({ type: "result", data });
+  broadcast({ type: "result", videoId, data });
   activeJob = null;
   partialResult = null;
 }
 
 function finishWithError(error, details = "") {
-  broadcast({ type: "error", error, details });
+  const videoId = activeJob?.videoId || "";
+  broadcast({ type: "error", videoId, error, details });
   activeJob = null;
   partialResult = null;
 }
@@ -115,7 +143,12 @@ function finishWithError(error, details = "") {
 function cancelAsr() {
   if (!activeJob || !nativePort) return;
   nativePort.postMessage({ action: "cancel", jobId: activeJob.jobId });
-  broadcast({ type: "progress", stage: "cancelling", message: "正在取消任务…" });
+  broadcast({
+    type: "progress",
+    videoId: activeJob.videoId,
+    stage: "cancelling",
+    message: "正在取消任务…"
+  });
 }
 
 function broadcast(message) {
@@ -138,4 +171,20 @@ function isYouTubeUrl(value) {
   } catch (_error) {
     return false;
   }
+}
+
+function parseYouTubeVideoId(value) {
+  try {
+    const url = new URL(value);
+    if (url.hostname === "youtu.be") return url.pathname.split("/").filter(Boolean)[0] || "";
+    if (url.pathname.startsWith("/shorts/")) return url.pathname.split("/")[2] || "";
+    return url.searchParams.get("v") || "";
+  } catch (_error) {
+    return "";
+  }
+}
+
+function normalizeLanguage(value) {
+  const language = String(value || "auto").toLowerCase();
+  return language === "auto" || /^[a-z]{2,3}$/.test(language) ? language : "auto";
 }
