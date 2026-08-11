@@ -12,7 +12,7 @@
 
 ## 下载与安装（macOS）
 
-1. 从 GitHub Releases 下载 `video-subtitle-extractor-v0.1.1-macos.zip`。
+1. 从 GitHub Releases 下载 `video-subtitle-extractor-v0.1.2-macos.zip`。
 2. 解压后，双击 `install-macos.command`。
 3. 首次安装会创建独立 Python 虚拟环境并安装语音识别依赖，可能需要几分钟。
 4. 打开 `chrome://extensions`，开启“开发者模式”。
@@ -68,6 +68,7 @@ node --check extension/background.js
 node --check extension/content.js
 node --check extension/page.js
 node --check extension/popup.js
+node --test extension/tests/*.test.js
 python3 -m unittest discover -s native-host/tests
 bash scripts/build-release.sh
 ```

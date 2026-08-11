@@ -19,6 +19,7 @@ jobs:
           node --check extension/content.js
           node --check extension/page.js
           node --check extension/popup.js
+          node --test extension/tests/*.test.js
           python3 -m unittest discover -s native-host/tests
       - name: Build archive
         run: bash scripts/build-release.sh
