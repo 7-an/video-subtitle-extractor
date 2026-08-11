@@ -5,11 +5,24 @@ const state = {
   running: false
 };
 
+const MODEL_STORAGE_KEY = "tubeCaptionAsrModel";
+const LANGUAGE_STORAGE_KEY = "tubeCaptionAsrLanguage";
+const MODEL_HINTS = {
+  tiny: "tiny：速度最快，适合快速初稿，准确度最低。",
+  base: "base：速度较快，准确度略高于 tiny。",
+  small: "small：默认推荐，在速度、内存和准确度之间较均衡。",
+  medium: "medium：准确度优先，但识别更慢、占用更多内存，首次需单独下载。"
+};
+const SUPPORTED_LANGUAGES = new Set(["auto", "zh", "en", "ja", "ko", "es", "fr", "de"]);
+
 const nodes = {
   statusBadge: document.getElementById("statusBadge"),
   videoTitle: document.getElementById("videoTitle"),
   videoMeta: document.getElementById("videoMeta"),
   trackSelect: document.getElementById("trackSelect"),
+  modelSelect: document.getElementById("modelSelect"),
+  languageSelect: document.getElementById("languageSelect"),
+  modelHint: document.getElementById("modelHint"),
   extractButton: document.getElementById("extractButton"),
   asrButton: document.getElementById("asrButton"),
   cancelButton: document.getElementById("cancelButton"),
@@ -27,6 +40,8 @@ background.onMessage.addListener(handleBackgroundMessage);
 nodes.extractButton.addEventListener("click", extractExistingCaption);
 nodes.asrButton.addEventListener("click", startAsr);
 nodes.cancelButton.addEventListener("click", () => background.postMessage({ type: "cancelAsr" }));
+nodes.modelSelect.addEventListener("change", saveAsrPreferences);
+nodes.languageSelect.addEventListener("change", saveAsrPreferences);
 document.querySelectorAll("[data-format]").forEach((button) => {
   button.addEventListener("click", () => downloadResult(button.dataset.format));
 });
@@ -35,6 +50,7 @@ initialize();
 
 async function initialize() {
   clearResult();
+  await restoreAsrPreferences();
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   state.tab = tab;
 
@@ -123,8 +139,8 @@ function startAsr() {
     type: "startAsr",
     url: state.tab.url,
     videoId: state.video?.videoId || "",
-    language: "auto",
-    model: "small"
+    language: selectedLanguage(),
+    model: selectedModel()
   });
 }
 
@@ -193,6 +209,8 @@ function isMessageForCurrentVideo(message) {
 function setWorking(working, text = "", localAsr = false) {
   nodes.extractButton.disabled = working || !(state.video?.tracks?.length);
   nodes.asrButton.disabled = working;
+  nodes.modelSelect.disabled = working;
+  nodes.languageSelect.disabled = working;
   nodes.cancelButton.hidden = !(working && localAsr);
   nodes.progress.hidden = !working;
   if (text) setMessage(text);
@@ -206,6 +224,48 @@ function setStatus(text, variant = "") {
 function setMessage(text, error = false) {
   nodes.message.textContent = text;
   nodes.message.classList.toggle("error", error);
+}
+
+async function restoreAsrPreferences() {
+  let stored = {};
+  try {
+    stored = await chrome.storage.local.get([MODEL_STORAGE_KEY, LANGUAGE_STORAGE_KEY]);
+  } catch (_error) {
+    // Keep safe defaults when extension storage is temporarily unavailable.
+  }
+  const model = Object.hasOwn(MODEL_HINTS, stored[MODEL_STORAGE_KEY])
+    ? stored[MODEL_STORAGE_KEY]
+    : "small";
+  const language = SUPPORTED_LANGUAGES.has(stored[LANGUAGE_STORAGE_KEY])
+    ? stored[LANGUAGE_STORAGE_KEY]
+    : "auto";
+  nodes.modelSelect.value = model;
+  nodes.languageSelect.value = language;
+  updateModelHint();
+}
+
+function saveAsrPreferences() {
+  const model = selectedModel();
+  const language = selectedLanguage();
+  nodes.modelSelect.value = model;
+  nodes.languageSelect.value = language;
+  updateModelHint();
+  chrome.storage.local.set({
+    [MODEL_STORAGE_KEY]: model,
+    [LANGUAGE_STORAGE_KEY]: language
+  }).catch(() => {});
+}
+
+function updateModelHint() {
+  nodes.modelHint.textContent = MODEL_HINTS[selectedModel()];
+}
+
+function selectedModel() {
+  return Object.hasOwn(MODEL_HINTS, nodes.modelSelect.value) ? nodes.modelSelect.value : "small";
+}
+
+function selectedLanguage() {
+  return SUPPORTED_LANGUAGES.has(nodes.languageSelect.value) ? nodes.languageSelect.value : "auto";
 }
 
 function sendToTab(type, payload = {}) {

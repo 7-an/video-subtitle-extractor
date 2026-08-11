@@ -281,7 +281,7 @@ def transcribe(request: dict[str, Any]) -> dict[str, Any]:
             "selectedTrack": {
                 "id": "local-asr",
                 "language": detected_language,
-                "label": f"{detected_language}（本地 Whisper）",
+                "label": f"{detected_language}（本地 Whisper · {model_name}）",
                 "source": "local-asr",
                 "model": model_name,
             },

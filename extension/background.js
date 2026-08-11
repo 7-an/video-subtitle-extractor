@@ -1,5 +1,6 @@
 const NATIVE_HOST = "com.chrono_asr.host";
 const STORAGE_KEY = "tubeCaptionLastResult";
+const ALLOWED_MODELS = new Set(["tiny", "base", "small", "medium"]);
 const clients = new Set();
 let nativePort = null;
 let activeJob = null;
@@ -53,8 +54,10 @@ function startAsr(message) {
     return;
   }
 
+  const model = ALLOWED_MODELS.has(message.model) ? message.model : "small";
+  const language = normalizeLanguage(message.language);
   const jobId = crypto.randomUUID();
-  activeJob = { jobId, url: message.url, videoId };
+  activeJob = { jobId, url: message.url, videoId, model, language };
   partialResult = null;
 
   try {
@@ -63,8 +66,8 @@ function startAsr(message) {
       action: "transcribe",
       jobId,
       url: message.url,
-      language: message.language || "auto",
-      model: message.model || "small"
+      language,
+      model
     });
     broadcast({
       type: "progress",
@@ -179,4 +182,9 @@ function parseYouTubeVideoId(value) {
   } catch (_error) {
     return "";
   }
+}
+
+function normalizeLanguage(value) {
+  const language = String(value || "auto").toLowerCase();
+  return language === "auto" || /^[a-z]{2,3}$/.test(language) ? language : "auto";
 }

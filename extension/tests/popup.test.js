@@ -20,8 +20,10 @@ function node() {
   };
 }
 
-test("clears a previous result when the next result is empty or mismatched", async () => {
+async function createPopup(stored = {}) {
   const nodes = new Map();
+  const backgroundMessages = [];
+  const storageWrites = [];
   const document = {
     getElementById(id) {
       if (!nodes.has(id)) nodes.set(id, node());
@@ -32,7 +34,7 @@ test("clears a previous result when the next result is empty or mismatched", asy
   };
   const background = {
     onMessage: { addListener() {} },
-    postMessage() {}
+    postMessage(message) { backgroundMessages.push(message); }
   };
   const chrome = {
     runtime: { connect() { return background; } },
@@ -40,11 +42,22 @@ test("clears a previous result when the next result is empty or mismatched", asy
       async query() { return [{ id: 1, url: "https://example.com", title: "Example" }]; },
       async sendMessage() { return { ok: false, error: "not used" }; }
     },
-    downloads: { download() {} }
+    downloads: { download() {} },
+    storage: {
+      local: {
+        async get() { return stored; },
+        async set(value) { storageWrites.push(value); }
+      }
+    }
   };
   const context = vm.createContext({ Blob, URL, chrome, console, document, setTimeout });
   vm.runInContext(SOURCE, context, { filename: "popup.js" });
   await new Promise((resolve) => setImmediate(resolve));
+  return { backgroundMessages, context, nodes, storageWrites };
+}
+
+test("clears a previous result when the next result is empty or mismatched", async () => {
+  const { context, nodes } = await createPopup();
   vm.runInContext('state.video = { videoId: "video-a", tracks: [] };', context);
 
   const valid = {
@@ -62,4 +75,25 @@ test("clears a previous result when the next result is empty or mismatched", asy
 
   assert.equal(context.showResult({ ...valid, videoId: "video-b" }), false);
   assert.equal(nodes.get("resultPanel").hidden, true);
+});
+
+test("restores and sends the selected ASR model and language", async () => {
+  const { backgroundMessages, context, nodes } = await createPopup({
+    tubeCaptionAsrModel: "medium",
+    tubeCaptionAsrLanguage: "zh"
+  });
+  vm.runInContext(`
+    state.tab = { id: 1, url: "https://www.youtube.com/watch?v=video-a" };
+    state.video = { videoId: "video-a", tracks: [] };
+  `, context);
+
+  assert.equal(nodes.get("modelSelect").value, "medium");
+  assert.equal(nodes.get("languageSelect").value, "zh");
+  assert.match(nodes.get("modelHint").textContent, /准确度优先/);
+
+  context.startAsr();
+  const request = backgroundMessages.find((item) => item.type === "startAsr");
+  assert.equal(request.model, "medium");
+  assert.equal(request.language, "zh");
+  assert.equal(request.videoId, "video-a");
 });
